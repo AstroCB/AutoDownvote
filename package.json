@@ -1,0 +1,11 @@
+{
+  "name": "autodownvote",
+  "version": "1.0.0",
+  "description": "Downvotes all messages from a specific user on Facebook Messenger.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "author": "Cameron Bernhardt (AstroCB)",
+  "license": "MIT"
+}
