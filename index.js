@@ -62,6 +62,22 @@ function initPrompt() {
 }
 
 /*
+	Performs a search for the given user asynchronously and returns any match info found if
+	successful (or otherwise rejects the promise).
+*/
+function findUser(user, api) {
+	return new Promise((resolve, reject) => {
+		api.getUserID(user, (err, data) => {
+			if (!err) {
+				resolve(data[0]);
+			} else {
+				reject(new Error("User not found"));
+			}
+		});
+	});
+}
+
+/*
 	Checks whether a user has been selected for downvoting and loads it if so.
 
 	Otherwise, asks for a user to search for and saves this user for later, then
@@ -70,40 +86,52 @@ function initPrompt() {
 function getID(api, cb) {
 	try {
 		// Check for existing user.js
-		const user = require("user.js");
-		cb(user.name, user.id);
+		const userData = fs.readFileSync("users.json");
+		const users = JSON.parse(userData);
+		cb(users.map(e => e.name), users.map(e => e.id));
 	} catch (e) {
 		// If none found, ask for a user and save it, then pass back to main
 		initPrompt();
-		rl.question("Name of user you'd like to downvote? ", (user) => {
-			api.getUserID(user, (err, data) => {
-				if (!err) {
-					const match = data[0];
-					fs.writeFileSync("user.js", `exports.name = "${match.name}";\nexports.id = "${match.userID}"`);
-					cb(match.name, match.userID);
-				} else {
-					throw Error("User not found");
+		rl.question("Name of user(s) you'd like to downvote? ", async res => {
+			const searches = res.split(",");
+			let users = [];
+			let lostUsers = [];
+			for(let i = 0; i < searches.length; i++) {
+				const search = searches[i];
+				try {
+					let user = await findUser(search, api);
+					users.push({
+						"name": user.name,
+						"id": user.userID
+					});
+				} catch (e) {
+					lostUsers.push(search);
+					console.log(e);
 				}
-			});
+			}
+			if (lostUsers.length > 0) {
+				console.log(`The following users could not be found: ${lostUsers.join(", ")}`);
+			}
+			fs.writeFileSync("users.json", JSON.stringify(users));
+			cb(users.map(e => e.name), users.map(e => e.id));
 		});
 	}
 }
 
 /*
- * Downvotes user
+	Downvotes the selected user(s).
 */
 function main(api) {
 	// Use minimal logging from the API
 	api.setOptions({ "logLevel": "warn" });
 
 	// Poll for new messages and downvote them if they match the selected user
-	getID(api, (name, id) => {
-		console.log(`Downvoting ${name}'s messages...`);
+	getID(api, (names, ids) => {
+		console.log(`Downvoting messages from ${names.join("/")}...`);
 		api.listen((err, msg) => {
-			if (msg.type == "message" && msg.senderID == id) {
+			if (msg.type == "message" && msg.senderID in ids) {
 				api.setMessageReaction("👎", msg.messageID);
 			}
 		});
 	});
 }
-

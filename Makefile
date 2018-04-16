@@ -1,2 +1,2 @@
 clean:
-	rm appstate.json credentials.js user.js
+	rm appstate.json credentials.js users.json
